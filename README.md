@@ -1,2 +1,5 @@
 # AGE-AI
 Auto Generating and Executing AI Agent for Python/R
+
+## Warning
+THE OPENAI API IS ONLY FOR TESTING, PLEASE REMOVE IT FROM THE SCRIPT BEFORE YOU PUBLISH IT!!
