@@ -1,27 +1,147 @@
-# AGE-AI
-AGE (Auto Generating and Executing) AI Agent for Python/R
+Below is an example README file for your project:
 
+---
 
-## 1. Project Overview
-The **AGE AI Agent** is designed to simplify machine learning and data analysis tasks by automatically:
-1. **Retrieving** relevant Python or R functions from a database (MongoDB + FAISS).
-2. **Generating code** tailored to the user’s request (via OpenAI GPT).
-3. **Executing** that code (Python or R) and returning results or errors.
+# Age Function Explorer
 
-This approach reduces repetitive coding tasks, allowing data scientists and developers to prototype faster.
+Age Function Explorer is a unified tool that extracts machine learning function metadata from both Python and R packages, stores them in a MongoDB database, indexes them with FAISS using OpenAI-generated embeddings, and provides an interactive interface to query, generate, and execute code based on user queries.
 
-## 2. Installation and Dependency Setup
-1. **Python 3.8+ (recommended) if not already available.
-2. **Install Dependencies: MongoDB: Install and start MongoDB on localhost:27017.
-3. **Python Packages: openai, pymongo, faiss, rpy2
-4. **R execution(optional) Install R (4.x or higher).
-Ensure environment variable R_HOME is set (especially on Windows).
+## Table of Contents
 
-## 3. Example Queries and Expected Outputs
-Query: Train a decision tree model
-System Response:
-- Matches a relevant function (e.g., DecisionTreeClassifier from sklearn.tree).
-- Generates Python code snippet for reading a dataset, training the model, and printing predictions.
+- [Installation and Dependency Setup](#installation-and-dependency-setup)
+- [Example Queries and Expected Outputs](#example-queries-and-expected-outputs)
+- [Expanding the Package Database](#expanding-the-package-database)
+- [Usage](#usage)
+
+## Installation and Dependency Setup
+
+1. **Clone the Repository**
+
+   ```bash
+   git clone https://github.com/yourusername/age-function-explorer.git
+   cd age-function-explorer
+   ```
+
+2. **Create a Virtual Environment (optional but recommended)**
+
+   ```bash
+   python -m venv venv
+   source venv/bin/activate   # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install Required Python Packages**
+
+   The project depends on several libraries. You can install them using pip:
+
+   ```bash
+   pip install numpy openai faiss-cpu pymongo concurrent.futures rpy2
+   ```
+
+   *Note:* If you are using an operating system where FAISS is not available via pip, refer to the [FAISS installation guide](https://github.com/facebookresearch/faiss/blob/main/INSTALL.md).
+
+4. **MongoDB Setup**
+
+   - Make sure you have MongoDB installed and running.  
+   - By default, the tool connects to MongoDB at `mongodb://localhost:27017/`. Adjust the URI if needed in the `Age` class constructor.
+
+5. **Environment Variables**
+
+   Set your OpenAI API key as an environment variable:
+
+   ```bash
+   export OPENAI_API_KEY="your_openai_api_key"   # On Windows use: set OPENAI_API_KEY=your_openai_api_key
+   ```
+
+## Example Queries and Expected Outputs
+
+Once the program is running, you will see a prompt in the interactive session. Below are some sample queries and what you might expect:
+
+1. **Query Example:**
+
+   **Input:**  
+   ```
+   Enter your query (or type 'exit' to quit): train a decision tree
+   ```
+
+   **Expected Output:**
+   - The program will display a list of matched functions from the database, e.g.:
+     ```
+     🔍 **Matched Functions:**
+     1. DecisionTreeClassifier (Package: sklearn.tree, Language: Python)
+     2. DecisionTreeRegressor (Package: sklearn.tree, Language: Python)
+     ```
+   - If multiple functions are found, you will be prompted to select one.
+   - After selection, the tool will generate a parameter list using OpenAI and prompt you to generate instance code.
+   - Once confirmed, the generated Python script is displayed and executed, with the execution output (such as predictions on the Iris dataset) printed.
+
+2. **Query Example for R Function:**
+
+   **Input:**  
+   ```
+   Enter your query (or type 'exit' to quit): run k-means clustering in R
+   ```
+
+   **Expected Output:**
+   - The program returns matched R functions, such as one from the `stats` package.
+   - After selecting the appropriate function, the parameter list is filled, and the tool generates R code.
+   - The generated R code is executed via rpy2, and the output (e.g., cluster assignments) is printed.
+
+## Expanding the Package Database
+
+To expand the list of packages from which function metadata is extracted:
+
+1. **For Python Modules:**
+   - Locate the `python_modules` list in the `update_database` method of the `Age` class.
+   - Add the fully qualified module names you wish to include. For example:
+     ```python
+     python_modules = [
+         "sklearn.ensemble",
+         "sklearn.linear_model",
+         "sklearn.tree",
+         "sklearn.cluster",
+         "sklearn.decomposition",
+         "sklearn.preprocessing",
+         "sklearn.model_selection",
+         "sklearn.svm",
+         "sklearn.neural_network",
+         "sklearn.feature_extraction.text",
+         "your.new.module"  # add your new module here
+     ]
+     ```
+
+2. **For R Packages:**
+   - Locate the `r_packages` list in the `update_database` method of the `Age` class.
+   - Add the names of the new R packages you want to include. For example:
+     ```python
+     r_packages = ["e1071", "caret", "MASS", "stats", "randomForest", "cluster", "yourNewRPackage"]
+     ```
+   - Make sure that the R package is installed in your R environment so that `rpy2` can successfully import it.
+
+3. **Re-run the Program:**
+   - After updating the lists, restart the program to re-extract and update the database with functions from the new packages.
+
+## Usage
+
+1. **Start the Program:**
+
+   Run the script:
+   ```bash
+   python your_script_name.py
+   ```
+
+2. **Interactive Query Session:**
+
+   - After initialization, the program enters an interactive session.
+   - You can continuously enter queries and process function matches, generate code, and execute it.
+   - To exit the session, type `exit` at the prompt.
+
+3. **Examine Output:**
+
+   - The program prints matched functions, generated parameter descriptions, generated code, and execution outputs directly in the console.
+
+---
+
+This README provides all the necessary details for installation, usage, and expansion of the package database. Enjoy exploring and generating code with Age Function Explorer!nting predictions.
 - Asks if you want to execute the code. On execution, displays the console output or an error.
 
 ## 4.Expanding the Package Database
