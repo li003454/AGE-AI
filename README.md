@@ -14,8 +14,8 @@ Auto Generating and Executing AI Agent for Python/R is a unified ai agent tool t
 1. **Clone the Repository**
 
    ```bash
-   git clone https://github.com/yourusername/age-function-explorer.git
-   cd age-function-explorer
+   git clone https://github.com/li003454/AGE-ai.git
+   cd AGE-ai
    ```
 
 2. **Create a Virtual Environment (optional but recommended)**
@@ -41,6 +41,15 @@ Auto Generating and Executing AI Agent for Python/R is a unified ai agent tool t
    - By default, the tool connects to MongoDB at `mongodb://localhost:27017/`. Adjust the URI if needed in the `Age` class constructor.
 
 5. **Environment Variables**
+
+   ## API Key Requirements
+
+   This tool uses OpenAI's API for two main purposes:
+   - **Code Generation:** It calls the GPT-4o model (a variant of GPT-4 optimized for coding tasks).
+   - **Embeddings:** It utilizes the `text-embedding-3-small` model to generate embeddings for function records.
+
+   **Important:**  
+   Ensure your OpenAI API key has access to both GPT-4o and the text embedding models. 
 
    Set your OpenAI API key as an environment variable:
 
