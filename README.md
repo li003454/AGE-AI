@@ -1,7 +1,3 @@
-Below is an example README file for your project:
-
----
-
 # Auto Generating and Executing AI Agent for Python/R
 
 Auto Generating and Executing AI Agent for Python/R is a unified ai agent tool that extracts machine learning function metadata from both Python and R packages, stores them in a MongoDB database, indexes them with FAISS using OpenAI-generated embeddings, and provides an interactive interface to query, generate, and execute code based on user queries.
