@@ -51,10 +51,11 @@ Age Function Explorer is a unified tool that extracts machine learning function 
    ```bash
    export OPENAI_API_KEY="your_openai_api_key"   # On Windows use: set OPENAI_API_KEY=your_openai_api_key
    ```
+   - Note that you must have your own OPENAI_API_KEY to initialize the Age class, we don't provide a sample api key here(;
 
 ## Example Queries and Expected Outputs
 
-Once the program is running, you will see a prompt in the interactive session. Below are some sample queries and what you might expect:
+Once the program is running, you will see a prompt in the interactive session. Below are some sample queries and what you might expect:(we also provide a main.py to help understand how to initialize the Age class, if you are confused, directly copy the main.py)
 
 1. **Query Example:**
 
