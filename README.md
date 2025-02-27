@@ -130,13 +130,21 @@ To expand the list of packages from which function metadata is extracted:
    python your_script_name.py
    ```
 
-2. **Interactive Query Session:**
+   If you're not still sure how to use it, run
+   ```bash
+   python main.py
+   ```
+   instead
+   
+   # Make sure the age.py and your .py are in the same directory!
+
+3. **Interactive Query Session:**
 
    - After initialization, the program enters an interactive session.
    - You can continuously enter queries and process function matches, generate code, and execute it.
    - To exit the session, type `exit` at the prompt.
 
-3. **Examine Output:**
+4. **Examine Output:**
 
    - The program prints matched functions, generated parameter descriptions, generated code, and execution outputs directly in the console.
 
