@@ -13,132 +13,22 @@ import importlib
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
 
-def profile_func(func):
-    """Simple profiling decorator to record the execution time of functions."""
-    def wrapper(*args, **kwargs):
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        elapsed = time.perf_counter() - start
-        print(f"[PROFILE] {func.__name__} executed in {elapsed:.4f} seconds")
-        return result
-    return wrapper
 
-# ─── Python Function Extraction ─────────────────────────────────────────────
+from functions import (
+    get_module_exports,
+    extract_ml_functions,
+    remove_backspaces,
+    extract_description,
+    extract_r_functions_from_packages
+)
 
-def get_module_exports(module_name):
-    """
-    Get the exported functions/classes from a specified module.
-    """
-    try:
-        module = importlib.import_module(module_name)
-    except Exception as e:
-        print(f"❌ Failed to import module {module_name}: {e}")
-        return []
-    exports = getattr(module, '__all__', None)
-    if exports is None:
-        exports = dir(module)
-    records = []
-    for name in exports:
-        try:
-            obj = getattr(module, name)
-            doc = obj.__doc__
-            if doc:
-                doc = doc.strip().split('\n')[0]
-            else:
-                doc = "No description."
-            records.append({
-                "name": name,
-                "package": module_name,
-                "description": doc,
-                "language": "Python"
-            })
-        except Exception:
-            continue
-    return records
+from utils import profile_func, print_performance_metrics
+from openai_utils import fill_parameters, generate_code
+from code_executor import execute_python_code, execute_r_code
 
-def extract_ml_functions(ml_modules):
-    """
-    Iterate through multiple machine learning modules and extract all exported function/class information (Python).
-    """
-    all_records = []
-    for module in ml_modules:
-        try:
-            records = get_module_exports(module)
-            print(f"✅ Extracted {len(records)} records from module {module}")
-            all_records.extend(records)
-        except Exception as e:
-            print(f"❌ Error extracting from module {module}: {e}")
-    return all_records
 
-# ─── R Function Extraction Helper Functions ─────────────────────────────────────────────
 
-def remove_backspaces(s):
-    """
-    Simulate backspace behavior: remove the previous character when encountering a backspace character '\x08'.
-    """
-    result = []
-    for char in s:
-        if char == '\x08':
-            if result:
-                result.pop()
-        else:
-            result.append(char)
-    return "".join(result)
 
-def extract_description(help_text):
-    """
-    Extract the 'Description' section from help text:
-    Clean the backspace characters, use regex to extract text between "Description:" and "Usage:",
-    and compress extra whitespace into single spaces.
-    """
-    clean_text = remove_backspaces(help_text)
-    pattern = r"Description:\s*(.*?)\s*Usage:"
-    match = re.search(pattern, clean_text, re.DOTALL)
-    if match:
-        description_text = match.group(1)
-        return " ".join(description_text.split())
-    else:
-        return ""
-
-def extract_r_functions_from_packages(packages):
-    """
-    Iterate through predefined R packages and extract the name and description information of all functions.
-    """
-    r_records = []
-    for pkg in packages:
-        try:
-            importr(pkg)
-        except Exception as e:
-            print(f"Error loading R package {pkg}: {e}")
-            continue
-
-        package_env = "package:" + pkg
-        func_names = robjects.r('ls("%s")' % package_env)
-        for func in func_names:
-            func = str(func)
-            try:
-                # Determine whether the object is a function
-                is_fun = robjects.r('is.function(get("%s", envir=as.environment("package:%s")))' % (func, pkg))[0]
-            except Exception as e:
-                is_fun = False
-            if not is_fun:
-                continue
-
-            try:
-                help_cmd = 'capture.output(tools:::Rd2txt(utils:::.getHelpFile(help("%s", package="%s"))))' % (func, pkg)
-                help_lines = robjects.r(help_cmd)
-                help_text = "\n".join([str(line) for line in help_lines])
-                description = extract_description(help_text)
-            except Exception as e:
-                description = ""
-            r_records.append({
-                "name": func,
-                "package": pkg,
-                "description": description,
-                "language": "R"
-            })
-        print(f"✅ Extracted {len(r_records)} records from R package {pkg}")
-    return r_records
 
 # ─── Database and FAISS Operations ─────────────────────────────────────────────
 
@@ -152,40 +42,56 @@ class Age:
         and update the database by extracting functions from predefined Python and R modules.
         """
         if openai_api_key is not None:
-            openai.api_key = openai_api_key
+            # Initialize MongoDB
+            self.client = MongoClient(mongodb_uri)
+            self.db = self.client[db_name]
+            self.collection = self.db["packages"]
 
-        # Initialize MongoDB
-        self.client = MongoClient(mongodb_uri)
-        self.db = self.client[db_name]
-        self.collection = self.db["packages"]
+            # Drop all indexes (except the default _id index)
+            self.collection.drop_indexes()
+            # Create the necessary unique index
+            self.collection.create_index("name", unique=True)
+            print("✅ Connected to MongoDB database")
 
-        # Drop all indexes (except the default _id index)
-        self.collection.drop_indexes()
-        # Create the necessary unique index
-        self.collection.create_index("name", unique=True)
-        print("✅ Connected to MongoDB database")
+            # Clear the database and update data (including functions from Python and R)
+            self.clear_database()
+            self.update_database()
 
-        # Clear the database and update data (including functions from Python and R)
-        self.clear_database()
-        self.update_database()
+            # Initialize FAISS index and ID mapping (dimension 1536)
+            self.dimension = 1536
+            self.index = faiss.IndexFlatL2(self.dimension)
+            self.id_index = faiss.IndexIDMap(self.index)
+            self.id_to_mongo_id = {}
+            self.embedding_cache = {}
 
-        # Initialize FAISS index and ID mapping (dimension 1536)
-        self.dimension = 1536
-        self.index = faiss.IndexFlatL2(self.dimension)
-        self.id_index = faiss.IndexIDMap(self.index)
-        self.id_to_mongo_id = {}
-        self.embedding_cache = {}
+            # Load function records from MongoDB and build the FAISS index
+            self.load_functions()
 
-        # Load function records from MongoDB and build the FAISS index
-        self.load_functions()
+            print("✅ Age class initialized successfully")
+            self.summarize_database()
 
-        print("✅ Age class initialized successfully")
+    @profile_func
+    def summarize_database(self):
+        """
+        Summarize the database by printing the total number of function records,
+        as well as a breakdown by language.
+        """
+        total = self.collection.count_documents({})
+        python_count = self.collection.count_documents({"language": "Python"})
+        r_count = self.collection.count_documents({"language": "R"})
 
+        print("\n📊 Database Summary:")
+        print(f"   Total function records: {total}")
+        print(f"   Python functions: {python_count}")
+        print(f"   R functions: {r_count}")
+
+    @profile_func
     def clear_database(self):
         """Clear all function records from MongoDB (use with caution)."""
         self.collection.delete_many({})
         print("⚠️ All function data has been cleared from MongoDB")
 
+    @profile_func
     def update_database(self):
         """
         Extract function records from predefined Python modules and R packages,
@@ -203,6 +109,11 @@ class Age:
             "sklearn.svm",
             "sklearn.neural_network",
             "sklearn.feature_extraction.text"
+            # "sklearn.pipeline",  # Added for pipeline utilities
+            # "sklearn.metrics",  # Added for performance metrics
+            # "sklearn.naive_bayes",  # Added for Naive Bayes models
+            # "sklearn.manifold",  # Added for manifold learning
+            # "sklearn.gaussian_process"  # Added for Gaussian process models
         ]
         py_functions = extract_ml_functions(python_modules)
         for func in py_functions:
@@ -217,6 +128,7 @@ class Age:
         total = self.collection.count_documents({})
         print(f"✅ Database updated, total records: {total}")
 
+    @profile_func
     def get_embedding(self, text):
         """Call the OpenAI API to get the text embedding vector and use cache to reduce duplicate calls."""
         if text in self.embedding_cache:
@@ -304,114 +216,6 @@ class Age:
                     results.append(record)
         return results if results else None
 
-    def fill_parameters_with_openai(self, function_data):
-        """
-        Call the OpenAI API to generate a complete parameter list based on the function record,
-        and return the filled parameter description text.
-        """
-        function_name = function_data["name"]
-        package = function_data["package"]
-        description = function_data["description"]
-        prompt = f"""
-    You are an AI assistant that helps to fill in missing arguments for a {function_name}.
-    The function information is as follows:
-    Please provide a detailed, complete parameter list (with explanations) that would be appropriate for calling this function in a machine learning context.
-    Please provide an single line example with respect to call the selected function.
-    Output only the parameter list and the example in plain text.
-    """
-        client = openai.OpenAI(api_key=openai.api_key)
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a parameter assistant."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        filled_parameters = response.choices[0].message.content.strip()
-        return filled_parameters
-
-    @profile_func
-    def generate_code_with_openai(self, function_data):
-        """
-        Call the OpenAI API to generate complete code in the corresponding language (Python or R) based on the function record.
-        """
-        function_name = function_data["name"]
-        package = function_data["package"]
-        language = function_data["language"]
-
-        if language.lower() == "python":
-            prompt = f"""
-            You are an AI assistant that generates Python code for machine learning tasks.
-            Please generate a complete Python script that:
-            - Uses `{package}.{function_name}` for training
-            - Loads the Iris dataset (`sklearn.datasets.load_iris`)
-            - Splits data using `train_test_split`
-            - Trains the model and makes predictions
-            - Prints the first 5 predicted labels
-            The script should be executable with all necessary imports.
-            """
-        elif language.lower() == "r":
-            prompt = f"""
-            You are an AI assistant that generates R code for statistical computing.
-            Please generate a complete R script that:
-            - Uses `{package}::{function_name}` for training
-            - Loads the iris dataset
-            - Splits data into train/test sets
-            - Trains the model and makes predictions
-            - Prints the first 5 predicted labels
-            The script should be executable with all necessary library calls.
-            """
-        client = openai.OpenAI(api_key=openai.api_key)
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a coding assistant."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        raw_output = response.choices[0].message.content
-        match = re.search(r"```(python|r)\n(.*?)```", raw_output, re.DOTALL)
-        if match:
-            return match.group(2)
-        else:
-            return raw_output
-
-    @profile_func
-    def execute_python_code(self, code):
-        """
-        Execute the generated Python code using subprocess and return the result or error message.
-        """
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as temp_file:
-                temp_file.write(code)
-                temp_file_path = temp_file.name
-
-            result = subprocess.run(["python", temp_file_path], capture_output=True, text=True)
-            os.remove(temp_file_path)
-
-            if result.returncode == 0:
-                return f"✅ Code executed successfully!\nOutput:\n{result.stdout}"
-            else:
-                return f"❌ Failure!\nError message:\n{result.stderr}"
-        except Exception as e:
-            return f"❌ Error occurs when executing the code: {e}"
-
-    @profile_func
-    def execute_r_code(self, code):
-        """
-        Execute the generated R code using rpy2 and return the result or error message.
-        """
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".R", delete=False, mode="w", encoding="utf-8") as temp_file:
-                temp_file.write(code)
-                temp_file_path = temp_file.name
-
-            robjects.r['source'](temp_file_path)
-            os.remove(temp_file_path)
-            return "✅ R code executed successfully!"
-        except Exception as e:
-            return f"❌ Error occurs when executing the R code via rpy2: {e}"
-
     @profile_func
     def run_query(self, top_k=5):
         """
@@ -421,12 +225,16 @@ class Age:
           3. If multiple matches are found, prompt the user to choose one.
           4. Call OpenAI to generate corresponding code.
           5. Execute the generated code based on the language and output the result.
+          6. If the user inputs "performance", print the performance metrics.
         """
         while True:
-            query_text = input("\nEnter your query (or type 'exit' to quit): ")
+            query_text = input("\nEnter your query (or type 'exit' to quit, 'performance' to show metrics): ")
             if query_text.strip().lower() == "exit":
                 print("Exiting the query session.")
                 break
+            elif query_text.strip().lower() == "performance":
+                print_performance_metrics()
+                continue
 
             search_results = self.search(query_text, top_k=top_k)
             if search_results and isinstance(search_results, list):
@@ -470,8 +278,8 @@ class Age:
                 print("❌ No matching function found.")
 
 
-# if __name__ == "__main__":
-#     # Ensure that the OPENAI_API_KEY environment variable is set before running.
-#     api_key = os.getenv("OPENAI_API_KEY")
-#     age = Age(openai_api_key=api_key)
-#     age.run_query()
+if __name__ == "__main__":
+    # Ensure that the OPENAI_API_KEY environment variable is set before running.
+    api_key = os.getenv("OPENAI_API_KEY")
+    age = Age(openai_api_key=api_key)
+    age.run_query()
