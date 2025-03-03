@@ -18,8 +18,9 @@ def fill_parameters(api_key, function_data):
     Please provide an single line example with respect to call the selected function.
     Output only the parameter list and the example in plain text.
     """
-    openai.api_key = api_key
-    response = openai.ChatCompletion.create(
+
+    client = openai.OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a parameter assistant."},
@@ -64,8 +65,8 @@ def generate_code(api_key, function_data):
     else:
         return None
 
-    openai.api_key = api_key
-    response = openai.ChatCompletion.create(
+    client = openai.OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a coding assistant."},

@@ -1,28 +1,21 @@
 import json
-import os
-import re
-import subprocess
-import tempfile
 import time
+import os
 import numpy as np
 import openai
 import faiss
+from annotated_types import test_cases
 from pymongo import MongoClient
 import concurrent.futures
-import importlib
-import rpy2.robjects as robjects
-from rpy2.robjects.packages import importr
+from dotenv import load_dotenv
 
 
 from functions import (
-    get_module_exports,
     extract_ml_functions,
-    remove_backspaces,
-    extract_description,
     extract_r_functions_from_packages
 )
 
-from utils import profile_func, print_performance_metrics
+from utils import performance_metrics, profile_func, print_performance_metrics
 from openai_utils import fill_parameters, generate_code
 from code_executor import execute_python_code, execute_r_code
 
@@ -41,6 +34,12 @@ class Age:
         Initialize MongoDB, FAISS vector index, and OpenAI API Key (if provided),
         and update the database by extracting functions from predefined Python and R modules.
         """
+        self.mongodb_uri = mongodb_uri
+        self.openai_api_key = openai_api_key
+        self.db_name = db_name
+
+
+        openai.api_key = self.openai_api_key
         if openai_api_key is not None:
             # Initialize MongoDB
             self.client = MongoClient(mongodb_uri)
@@ -70,7 +69,6 @@ class Age:
             print("✅ Age class initialized successfully")
             self.summarize_database()
 
-    @profile_func
     def summarize_database(self):
         """
         Summarize the database by printing the total number of function records,
@@ -79,6 +77,7 @@ class Age:
         total = self.collection.count_documents({})
         python_count = self.collection.count_documents({"language": "Python"})
         r_count = self.collection.count_documents({"language": "R"})
+
 
         print("\n📊 Database Summary:")
         print(f"   Total function records: {total}")
@@ -109,6 +108,8 @@ class Age:
             "sklearn.svm",
             "sklearn.neural_network",
             "sklearn.feature_extraction.text"
+            "lightgbm",  # LightGBM（轻量级梯度提升）
+            "catboost",  # CatBoost 梯度提升库
             # "sklearn.pipeline",  # Added for pipeline utilities
             # "sklearn.metrics",  # Added for performance metrics
             # "sklearn.naive_bayes",  # Added for Naive Bayes models
@@ -127,6 +128,7 @@ class Age:
                                          {"$set": func}, upsert=True)
         total = self.collection.count_documents({})
         print(f"✅ Database updated, total records: {total}")
+
 
     @profile_func
     def get_embedding(self, text):
@@ -198,12 +200,16 @@ class Age:
             print(f"❌ Error while retrieving functions from MongoDB: {e}")
 
     @profile_func
-    def search(self, query, top_k=2):
-        """
-        Search for the vectors most similar to the query in the FAISS index,
-        then map the returned custom IDs back to the MongoDB _id to get the full function records.
-        """
-        query_vector = np.array([self.get_embedding(query)], dtype=np.float32)
+    def search(self, query, top_k=5):
+        # 生成查询嵌入
+        query_embedding = self.get_embedding(query)
+        # 对嵌入向量归一化（余弦相似度）
+        norm = np.linalg.norm(query_embedding)
+        if norm > 0:
+            query_embedding = query_embedding / norm
+        query_vector = np.array([query_embedding], dtype=np.float32)
+
+        # 使用内积作为度量
         distances, ids = self.id_index.search(query_vector, top_k)
         results = []
         for unique_id in ids[0]:
@@ -215,6 +221,8 @@ class Age:
                 if record:
                     results.append(record)
         return results if results else None
+
+
 
     @profile_func
     def run_query(self, top_k=5):
@@ -252,20 +260,20 @@ class Age:
                 else:
                     selected_func = search_results[0]
 
-                filled_function = self.fill_parameters_with_openai(selected_func)
+                filled_function = fill_parameters(self.openai_api_key,selected_func)
                 print(f"\n✅ Filled function parameters:\n{filled_function}\n")
 
                 answer = input("Do you want to generate instance code based on the above filled arguments? (Y/N): ")
                 if answer.strip().lower() == "y":
-                    code = self.generate_code_with_openai(selected_func)
+                    code = generate_code(self.openai_api_key,selected_func)
                     print("\n📌 Generated Code:\n", code)
 
                     if selected_func["language"].lower() == "python":
                         print("\n🚀 Executing Python Code...\n")
-                        result = self.execute_python_code(code)
+                        result = execute_python_code(code)
                     elif selected_func["language"].lower() == "r":
                         print("\n🚀 Executing R Code...\n")
-                        result = self.execute_r_code(code)
+                        result = execute_r_code(code)
                     else:
                         print(f"❌ Unsupported language: {selected_func['language']}")
                         result = None
@@ -277,9 +285,48 @@ class Age:
             else:
                 print("❌ No matching function found.")
 
+# ─── Benchmark to test the code ─────────────────────────────────────────────
+
+    def benchmark_query_accuracy(self, test_cases, top_k=5):
+        """
+        对一组测试用例进行查询准确率检测。
+        每个测试用例只包含查询语句和预期匹配的函数名称，
+        如果查询结果数组中有任一记录的函数名称包含预期函数名称，则认为该用例通过。
+
+        参数:
+          - test_cases: 一个列表，每个元素为字典，包含 "query" 和 "expected_function" 两个键。
+          - top_k: 每个查询返回的结果数量，默认为2。
+
+        方法会打印每个测试用例的结果以及总体的准确率。
+        """
+        benchmark_file = test_cases
+        with open(benchmark_file, "r", encoding="utf-8") as f:
+            test_cases = json.load(f)
+
+        passed = 0
+        total = len(test_cases)
+
+        for case in test_cases:
+            query = case["query"]
+            expected_func = case["expected_function"].lower()
+            results = self.search(query, top_k=top_k)
+            # 只要结果中有任一记录的函数名称包含预期关键字，就认为该用例通过
+            found = any(expected_func in func["name"].lower() for func in results) if results else False
+
+            status = "Pass" if found else "Fail"
+            if found:
+                passed += 1
+            print(f"Query: '{query}' | Expected Function: '{case['expected_function']}' | Status: {status}")
+
+        accuracy = (passed / total) * 100 if total else 0
+        print(f"\nTotal Test Cases: {total}, Passed: {passed}, Accuracy: {accuracy:.2f}%")
 
 if __name__ == "__main__":
-    # Ensure that the OPENAI_API_KEY environment variable is set before running.
-    api_key = os.getenv("OPENAI_API_KEY")
+    load_dotenv()  # 自动加载项目根目录下的 .env 文件
+    api_key = os.getenv("OPENAI_API_KEY1")
+    if not api_key:
+        raise Exception("API key not found in environment variables")
+    # # Ensure that the OPENAI_API_KEY environment variable is set before running.
     age = Age(openai_api_key=api_key)
-    age.run_query()
+    age.benchmark_query_accuracy("benchmark_tests.json", 10)
+    #age.run_query()
