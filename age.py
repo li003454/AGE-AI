@@ -289,15 +289,16 @@ class Age:
 
     def benchmark_query_accuracy(self, test_cases, top_k=5):
         """
-        对一组测试用例进行查询准确率检测。
-        每个测试用例只包含查询语句和预期匹配的函数名称，
-        如果查询结果数组中有任一记录的函数名称包含预期函数名称，则认为该用例通过。
+        Evaluate the query accuracy over a set of benchmark test cases.
 
-        参数:
-          - test_cases: 一个列表，每个元素为字典，包含 "query" 和 "expected_function" 两个键。
-          - top_k: 每个查询返回的结果数量，默认为2。
+        Each test case is expected to be a dictionary containing a "query" string and an "expected_function" string.
+        The test is considered passed if any function name in the search results contains the expected function name (case-insensitive).
 
-        方法会打印每个测试用例的结果以及总体的准确率。
+        Parameters:
+          - test_cases: A file path (string) to a JSON file containing the test cases.
+          - top_k: The number of search results to return for each query (default is 5).
+
+        This method prints the result for each test case and the overall accuracy.
         """
         benchmark_file = test_cases
         with open(benchmark_file, "r", encoding="utf-8") as f:
@@ -310,7 +311,7 @@ class Age:
             query = case["query"]
             expected_func = case["expected_function"].lower()
             results = self.search(query, top_k=top_k)
-            # 只要结果中有任一记录的函数名称包含预期关键字，就认为该用例通过
+            # The test passes if any of the returned function names (case-insensitive) contain the expected function keyword.
             found = any(expected_func in func["name"].lower() for func in results) if results else False
 
             status = "Pass" if found else "Fail"
@@ -320,13 +321,3 @@ class Age:
 
         accuracy = (passed / total) * 100 if total else 0
         print(f"\nTotal Test Cases: {total}, Passed: {passed}, Accuracy: {accuracy:.2f}%")
-
-if __name__ == "__main__":
-    load_dotenv()  # 自动加载项目根目录下的 .env 文件
-    api_key = os.getenv("OPENAI_API_KEY1")
-    if not api_key:
-        raise Exception("API key not found in environment variables")
-    # # Ensure that the OPENAI_API_KEY environment variable is set before running.
-    age = Age(openai_api_key=api_key)
-    age.benchmark_query_accuracy("benchmark_tests.json", 10)
-    #age.run_query()
