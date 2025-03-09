@@ -152,4 +152,90 @@ To expand the list of packages from which function metadata is extracted:
 4. **Examine Output:**
 
    - The program prints matched functions, generated parameter descriptions, generated code, and execution outputs directly in the console.
+Below is an updated README section that adds benchmark testing content and provides sample user cases. You can insert this section into your existing README file.
 
+---
+
+## Benchmark Testing and Use Cases
+
+The project includes a benchmark testing module to evaluate the query accuracy and latency of the system. Benchmark tests are defined in a JSON file (e.g., `benchmark_tests.json`) that contains a list of test cases. Each test case includes a query string and the expected function name. The test passes if any function in the search results contains the expected function keyword (case-insensitive).
+
+### Benchmark Test Cases Example
+
+Below is an example `benchmark_tests.json` file:
+
+```json
+[
+  {
+    "query": "Train a decision tree on my dataset",
+    "expected_function": "DecisionTreeClassifier"
+  },
+  {
+    "query": "Apply linear regression on the data",
+    "expected_function": "LinearRegression"
+  },
+  {
+    "query": "Cluster data using k-means algorithm",
+    "expected_function": "KMeans"
+  },
+  {
+    "query": "Perform principal component analysis",
+    "expected_function": "PCA"
+  },
+  {
+    "query": "Run support vector machine classification",
+    "expected_function": "SVC"
+  },
+  {
+    "query": "Build a random forest model",
+    "expected_function": "RandomForestClassifier"
+  },
+  {
+    "query": "Implement logistic regression for classification",
+    "expected_function": "LogisticRegression"
+  },
+  {
+    "query": "Use a neural network for image classification",
+    "expected_function": "MLPClassifier"
+  },
+  {
+    "query": "Apply decision tree regression",
+    "expected_function": "DecisionTreeRegressor"
+  },
+  {
+    "query": "Perform k-nearest neighbors classification",
+    "expected_function": "KNeighborsClassifier"
+  },
+  {
+    "query": "Conduct clustering with DBSCAN",
+    "expected_function": "DBSCAN"
+  },
+  {
+    "query": "Perform gradient boosting for regression",
+    "expected_function": "XGBRegressor"
+  },
+  {
+    "query": "Use LightGBM for binary classification",
+    "expected_function": "LGBMClassifier"
+  },
+  {
+    "query": "Apply CatBoost for multi-class classification",
+    "expected_function": "CatBoostClassifier"
+  },
+  {
+    "query": "Forecast time series using ARIMA model",
+    "expected_function": "ARIMA"
+  }
+]
+```
+
+### Running Benchmark Tests
+
+To run the benchmark tests:
+
+1. Ensure that the `benchmark_tests.json` file is in your project root directory.
+2. After initializing the Age class (e.g., via `python main.py`), call the benchmark testing method (for example, `age_instance.run_benchmark_tests()`). This method will:
+   - Load the test cases from the JSON file.
+   - Execute each query.
+   - Check if the search results include the expected function name.
+   - Print the result for each test case along with the overall accuracy.
