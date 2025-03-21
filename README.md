@@ -8,6 +8,8 @@ Auto Generating and Executing AI Agent for Python/R is a unified ai agent tool t
 - [Example Queries and Expected Outputs](#example-queries-and-expected-outputs)
 - [Expanding the Package Database](#expanding-the-package-database)
 - [Usage](#usage)
+- [Benchmark Testing and Use Cases](#benchmark-testing-and-use-cases)
+- [Performance Metrics and Benchmark Accuracy](#performance-metrics-and-benchmark-accuracy)
 
 ## Installation and Dependency Setup
 
@@ -229,13 +231,42 @@ Below is an example `benchmark_tests.json` file:
 ]
 ```
 
-### Running Benchmark Tests
 
-To run the benchmark tests:
+## Performance Metrics and Benchmark Accuracy
 
-1. Ensure that the `benchmark_tests.json` file is in your project root directory.
-2. After initializing the Age class (e.g., via `python main.py`), call the benchmark testing method (for example, `age_instance.run_benchmark_tests()`). This method will:
-   - Load the test cases from the JSON file.
-   - Execute each query.
-   - Check if the search results include the expected function name.
-   - Print the result for each test case along with the overall accuracy.
+We use a `profile_func` decorator that records the execution time for key functions (such as `search`, `load_functions`, etc.) in a global dictionary called `performance_metrics`. When the user types `"performance"` at the prompt, the system displays a table summarizing the performance of these functions along with basic information about the database.
+
+When you type **"performance"** at the interactive prompt, you will see a summary of the database and the performance of key functions. For example:
+
+```
+Database Summary:
+   Total function records: 978
+   Python functions: 191
+   R functions: 787
+
+Enter your query (or type 'exit' to quit, 'performance' to show metrics): performance
+
+=== Performance Metrics Summary ===
+clear_database: called 1 times, average time: 0.0197 seconds
+get_module_exports: called 11 times, average time: 0.0611 seconds
+extract_ml_functions: called 1 times, average time: 0.6725 seconds
+remove_backspaces: called 787 times, average time: 0.0001 seconds
+extract_description: called 787 times, average time: 0.0001 seconds
+extract_r_functions_from_packages: called 1 times, average time: 8.4248 seconds
+update_database: called 1 times, average time: 9.2451 seconds
+load_functions: called 1 times, average time: 2.5760 seconds
+===================================
+```
+
+These metrics provide insight into:
+- **Database Summary:** Total number of function records and their distribution between Python and R.
+- **Performance Metrics:** The number of times each critical function is called along with their average execution time.
+
+
+For benchmark accuracy testing, we have implemented tests in the `Age` class that check whether the expected function name appears in the search results. Each test case indicates whether it passes or fails. Users can run these tests by executing:
+
+```python
+age.benchmark_query_accuracy("benchmark_tests.json", 10)
+```
+
+In a given test file, you might see results such as 9/10 or 10/10 test cases passing. We are continuously evaluating whether this meets the requirements, and if additional quantitative measures are needed to further assess our system’s performance, we will update the tests accordingly.
